@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { PDFParse } from "pdf-parse";
+// @ts-expect-error - pdf-parse v1 has no type declarations
+import pdf from "pdf-parse/lib/pdf-parse.js";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -34,12 +35,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract text from PDF using pdf-parse v2 API
+    // Extract text from PDF
     const arrayBuffer = await file.arrayBuffer();
-    const pdfParser = new PDFParse({ data: new Uint8Array(arrayBuffer) });
-    const textResult = await pdfParser.getText();
-    const extractedText = textResult.text;
-    await pdfParser.destroy();
+    const buffer = Buffer.from(arrayBuffer);
+    const pdfData = await pdf(buffer);
+    const extractedText = pdfData.text;
 
     if (!extractedText || extractedText.trim().length < 50) {
       return NextResponse.json(
