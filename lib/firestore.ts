@@ -10,7 +10,7 @@ import {
   limit,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { getFirebaseDb } from "./firebase";
 import { DocumentSet, Flashcard, StudySession, UserProfile } from "./types";
 
 // ── Document Sets ──────────────────────────────────────────
@@ -19,7 +19,7 @@ export async function saveDocumentSet(
   userId: string,
   docSet: Omit<DocumentSet, "id">
 ): Promise<string> {
-  const docRef = doc(collection(db, "users", userId, "documents"));
+  const docRef = doc(collection(getFirebaseDb(), "users", userId, "documents"));
   await setDoc(docRef, {
     ...docSet,
     uploadedAt: new Date().toISOString(),
@@ -31,7 +31,7 @@ export async function getDocumentSets(
   userId: string
 ): Promise<DocumentSet[]> {
   const q = query(
-    collection(db, "users", userId, "documents"),
+    collection(getFirebaseDb(), "users", userId, "documents"),
     orderBy("uploadedAt", "desc")
   );
   const snapshot = await getDocs(q);
@@ -45,7 +45,7 @@ export async function getDocumentSet(
   userId: string,
   docId: string
 ): Promise<DocumentSet | null> {
-  const docRef = doc(db, "users", userId, "documents", docId);
+  const docRef = doc(getFirebaseDb(), "users", userId, "documents", docId);
   const snapshot = await getDoc(docRef);
   if (!snapshot.exists()) return null;
   return { id: snapshot.id, ...snapshot.data() } as DocumentSet;
@@ -58,7 +58,7 @@ export async function updateFlashcardProgress(
   docId: string,
   updatedFlashcards: Flashcard[]
 ): Promise<void> {
-  const docRef = doc(db, "users", userId, "documents", docId);
+  const docRef = doc(getFirebaseDb(), "users", userId, "documents", docId);
   await updateDoc(docRef, { flashcards: updatedFlashcards });
 }
 
@@ -68,7 +68,7 @@ export async function recordStudySession(
   userId: string,
   session: StudySession
 ): Promise<void> {
-  const docRef = doc(db, "users", userId, "sessions", session.date);
+  const docRef = doc(getFirebaseDb(), "users", userId, "sessions", session.date);
   await setDoc(docRef, session, { merge: true });
 }
 
@@ -77,7 +77,7 @@ export async function getRecentSessions(
   count: number = 30
 ): Promise<StudySession[]> {
   const q = query(
-    collection(db, "users", userId, "sessions"),
+    collection(getFirebaseDb(), "users", userId, "sessions"),
     orderBy("date", "desc"),
     limit(count)
   );
@@ -90,7 +90,7 @@ export async function getRecentSessions(
 export async function getUserProfile(
   userId: string
 ): Promise<UserProfile | null> {
-  const docRef = doc(db, "users", userId, "profile", "main");
+  const docRef = doc(getFirebaseDb(), "users", userId, "profile", "main");
   const snapshot = await getDoc(docRef);
   if (!snapshot.exists()) return null;
   return snapshot.data() as UserProfile;
@@ -100,7 +100,7 @@ export async function updateUserProfile(
   userId: string,
   profile: Partial<UserProfile>
 ): Promise<void> {
-  const docRef = doc(db, "users", userId, "profile", "main");
+  const docRef = doc(getFirebaseDb(), "users", userId, "profile", "main");
   await setDoc(docRef, profile, { merge: true });
 }
 
