@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-// @ts-expect-error - pdf-parse v1 has no type declarations
-import pdf from "pdf-parse/lib/pdf-parse.js";
+// @ts-expect-error - pdf-parse v1 lacks type declarations
+import pdf from "pdf-parse";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
