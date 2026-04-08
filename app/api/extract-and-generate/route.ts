@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 // @ts-expect-error - pdf-parse v1 lacks type declarations
 import pdf from "pdf-parse";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// Initialize Gemini API
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,22 +53,22 @@ export async function POST(request: NextRequest) {
     // Truncate text to fit within context window (roughly 150k chars is safe)
     const truncatedText = extractedText.substring(0, 150000);
 
-    // Generate flashcards and MCQs using Claude
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6-20250514",
-      max_tokens: 4096,
-      system: `You are an expert educational content creator. Your task is to generate study materials from academic text. 
-Always respond with ONLY valid JSON, no markdown formatting, no code blocks, no explanation.`,
-      messages: [
-        {
-          role: "user",
-          content: `Analyze the following academic text and generate study materials.
+    // Generate flashcards and MCQs using Gemini
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: { responseMimeType: "application/json" }
+    });
+
+    const prompt = `You are an expert educational content creator. Your task is to generate study materials from academic text. 
+Always respond with ONLY valid JSON. Keep it robust and accurate.
+
+Analyze the following academic text and generate study materials.
 
 Generate exactly:
 - 10 flashcards with a "front" (question/term) and "back" (answer/definition)
 - 5 multiple choice questions each with exactly 4 options
 
-Return ONLY this JSON structure (no markdown, no code fences):
+Return ONLY this JSON structure without any additional markdown formatting:
 {
   "flashcards": [
     { "front": "question or term", "back": "answer or definition" }
@@ -89,14 +88,10 @@ Make the MCQs test understanding, not just recall.
 Vary the difficulty from basic to advanced.
 
 TEXT:
-${truncatedText}`,
-        },
-      ],
-    });
+${truncatedText}`;
 
-    // Parse Claude's response
-    const responseText =
-      message.content[0].type === "text" ? message.content[0].text : "";
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
 
     // Try to extract JSON from the response (handle potential markdown wrapping)
     let jsonStr = responseText.trim();
@@ -108,7 +103,7 @@ ${truncatedText}`,
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      console.error("Failed to parse Claude response:", responseText);
+      console.error("Failed to parse Gemini response:", responseText);
       return NextResponse.json(
         { error: "Failed to parse AI response. Please try again." },
         { status: 500 }
