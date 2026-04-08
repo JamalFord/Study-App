@@ -5,6 +5,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  deleteDoc,
   query,
   orderBy,
   limit,
@@ -58,6 +59,14 @@ export async function renameDocument(
 ): Promise<void> {
   const docRef = doc(getFirebaseDb(), "users", userId, "documents", docId);
   await updateDoc(docRef, { fileName: newName });
+}
+
+export async function deleteDocumentSet(
+  userId: string,
+  docId: string
+): Promise<void> {
+  const docRef = doc(getFirebaseDb(), "users", userId, "documents", docId);
+  await deleteDoc(docRef);
 }
 
 // ── Flashcard Progress ──────────────────────────────────────

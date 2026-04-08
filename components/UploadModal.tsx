@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, DragEvent } from "react";
+import { useState, useRef, useEffect, DragEvent } from "react";
 import { Upload, FileText, X, Loader2, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
+import * as pdfjsLib from "pdfjs-dist";
 import { useRouter } from "next/navigation";
 
 interface UploadModalProps {
@@ -45,6 +46,10 @@ export default function UploadModal({
   const [showSettings, setShowSettings] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  }, []);
 
   if (!isOpen) return null;
 
@@ -118,8 +123,26 @@ export default function UploadModal({
       );
 
       try {
+        // --- Client-Side PDF Text Extraction ---
+        let extractedText = "";
+        try {
+          const arrayBuffer = await currentFile.file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            // @ts-expect-error - pdfjs items missing types
+            const pageText = textContent.items.map((item) => item.str).join(" ");
+            extractedText += pageText + "\n";
+          }
+        } catch (pdfErr) {
+          console.error("PDF extraction error:", pdfErr);
+          throw new Error("Failed to extract text from PDF in browser.");
+        }
+
         const formData = new FormData();
-        formData.append("file", currentFile.file);
+        formData.append("extractedText", extractedText);
+        formData.append("fileName", currentFile.file.name);
         formData.append("numFlashcards", numFlashcards.toString());
         formData.append("numMCQs", numMCQs.toString());
         formData.append("numCRQs", numCRQs.toString());

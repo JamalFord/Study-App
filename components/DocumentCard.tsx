@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Brain, HelpCircle, Clock, Pencil, Check, X } from "lucide-react";
+import { FileText, Brain, HelpCircle, Clock, Pencil, Check, X, Trash2 } from "lucide-react";
 import { DocumentSet } from "@/lib/types";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -9,13 +9,18 @@ import { useRouter } from "next/navigation";
 interface DocumentCardProps {
   doc: DocumentSet;
   onRename?: (id: string, newName: string) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
 }
 
-export default function DocumentCard({ doc, onRename }: DocumentCardProps) {
+export default function DocumentCard({ doc, onRename, onDelete }: DocumentCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(doc.fileName.replace(".pdf", ""));
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  
   const inputRef = useRef<HTMLInputElement>(null);
 
   const uploadDate = new Date(doc.uploadedAt).toLocaleDateString("en-US", {
@@ -65,12 +70,71 @@ export default function DocumentCard({ doc, onRename }: DocumentCardProps) {
     setEditName(doc.fileName.replace(".pdf", ""));
   };
 
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsConfirmingDelete(true);
+  };
+
+  const handleConfirmDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      setIsDeleting(true);
+      if (onDelete) await onDelete(doc.id);
+    } catch(err) {
+      console.error("Failed to delete", err);
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDisplayClick = () => {
+    if (!isEditing && !isConfirmingDelete && !isDeleting) {
+      router.push(`/study/${doc.id}`);
+    }
+  };
+
+  if (isDeleting) {
+    return (
+      <div className="glass p-5 h-full opacity-50 flex items-center justify-center relative">
+        <div className="flex flex-col items-center gap-2">
+          <Trash2 className="w-6 h-6 text-red-500 animate-pulse" />
+          <span className="text-sm font-medium text-[var(--foreground-muted)]">Deleting...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isConfirmingDelete) {
+    return (
+      <div className="glass p-5 h-full border border-red-500/30 flex flex-col justify-center items-center relative gap-4 cursor-default">
+        <h3 className="text-[var(--foreground)] font-medium text-center">Delete this document?</h3>
+        <div className="flex items-center gap-3 w-full">
+          <button 
+            onClick={handleConfirmDelete}
+            className="flex-1 px-3 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 text-sm font-medium transition-colors border border-red-500/20"
+          >
+            Yes, delete
+          </button>
+          <button 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsConfirmingDelete(false);
+            }}
+            className="flex-1 px-3 py-2 bg-[var(--surface-border)] text-[var(--foreground)] rounded-lg hover:bg-[var(--surface-hover)] text-sm font-medium transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div 
       className="glass glass-hover p-5 h-full group cursor-pointer relative"
-      onClick={() => {
-        if (!isEditing) router.push(`/study/${doc.id}`);
-      }}
+      onClick={handleDisplayClick}
     >
       {/* Header */}
       <div className="flex items-start gap-3 mb-4">
@@ -108,16 +172,25 @@ export default function DocumentCard({ doc, onRename }: DocumentCardProps) {
               <h3 className="font-semibold text-[var(--foreground)] truncate group-hover:text-indigo-400 transition-colors">
                 {doc.fileName.replace(".pdf", "")}
               </h3>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsEditing(true);
-                }}
-                className="opacity-0 group-hover/title:opacity-100 p-1 text-[var(--foreground-muted)] hover:text-indigo-400 transition-all rounded hover:bg-indigo-500/10"
-                aria-label="Rename document"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
+              <div className="opacity-0 group-hover/title:opacity-100 flex items-center gap-1 transition-all">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditing(true);
+                  }}
+                  className="p-1 text-[var(--foreground-muted)] hover:text-indigo-400 rounded hover:bg-indigo-500/10"
+                  aria-label="Rename document"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleDeleteClick}
+                  className="p-1 text-[var(--foreground-muted)] hover:text-red-400 rounded hover:bg-red-500/10"
+                  aria-label="Delete document"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           )}
           <p className="text-xs text-[var(--foreground-muted)] flex items-center gap-1 mt-0.5">

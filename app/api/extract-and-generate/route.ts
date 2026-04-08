@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-// @ts-expect-error - pdf-parse v1 lacks type declarations
-import pdf from "pdf-parse";
 
 // Initialize Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -9,14 +7,15 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const extractedText = formData.get("extractedText") as string | null;
+    const fileName = formData.get("fileName") as string | null;
     const numFlashcards = parseInt((formData.get("numFlashcards") as string) || "10", 10);
     const numMCQs = parseInt((formData.get("numMCQs") as string) || "5", 10);
     const numCRQs = parseInt((formData.get("numCRQs") as string) || "0", 10);
 
-    if (!file) {
+    if (!extractedText || !fileName) {
       return NextResponse.json(
-        { error: "No file uploaded" },
+        { error: "No extracted text or filename provided" },
         { status: 400 }
       );
     }
@@ -28,29 +27,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
-    if (file.type !== "application/pdf") {
-      return NextResponse.json(
-        { error: "Only PDF files are supported" },
-        { status: 400 }
-      );
-    }
-
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: "File size must be less than 10MB" },
-        { status: 400 }
-      );
-    }
-
-    // Extract text from PDF
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const pdfData = await pdf(buffer);
-    const extractedText = pdfData.text;
-
-    if (!extractedText || extractedText.trim().length < 50) {
+    if (extractedText.trim().length < 50) {
       return NextResponse.json(
         {
           error:
@@ -171,7 +148,7 @@ ${truncatedText}`;
       flashcards: returnData.flashcards,
       mcQuestions: returnData.mcQuestions,
       crQuestions: returnData.crQuestions,
-      fileName: file.name,
+      fileName: fileName,
       textPreview: extractedText.substring(0, 200),
     });
   } catch (error) {

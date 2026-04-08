@@ -1,4 +1,4 @@
-h"use client";
+"use client";
 
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
@@ -10,6 +10,9 @@ import {
   Target,
   BookOpen,
   Loader2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import StatsCard from "@/components/StatsCard";
@@ -34,6 +37,11 @@ export default function DashboardPage() {
   const [streak, setStreak] = useState(0);
   const [totalCards, setTotalCards] = useState(0);
   const [todayReviewed, setTodayReviewed] = useState(0);
+
+  // Search & Pagination
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 9;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -122,6 +130,21 @@ export default function DashboardPage() {
     }
   };
 
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1); // Reset to first page on search
+  };
+
+  const filteredDocuments = documents.filter((doc) =>
+    doc.fileName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredDocuments.length / ITEMS_PER_PAGE);
+  const paginatedDocuments = filteredDocuments.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   if (authLoading || (!user && !authLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -178,12 +201,24 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Documents */}
-        <div className="mb-4">
+        {/* Documents Header & Search */}
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-indigo-400" />
             Your Documents
           </h2>
+          {documents.length > 0 && (
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--foreground-muted)]" />
+              <input
+                type="text"
+                placeholder="Search documents..."
+                value={searchQuery}
+                onChange={handleSearch}
+                className="w-full bg-[var(--surface)] text-[var(--foreground)] placeholder:text-[var(--foreground-muted)] text-sm rounded-lg pl-9 pr-4 py-2 border border-[var(--surface-border)] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              />
+            </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -194,36 +229,69 @@ export default function DashboardPage() {
           <div className="glass p-12 text-center border border-[var(--surface-border)]">
             <BookOpen className="w-12 h-12 mx-auto mb-4 text-[var(--foreground-muted)]" />
             <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
-              No documents yet
+              No documents found
             </h3>
             <p className="text-sm text-[var(--foreground-muted)] mb-6">
-              Upload your first PDF to start generating study materials.
+              {searchQuery ? "Try adjusting your search query." : "Upload your first PDF to start generating study materials."}
             </p>
-            <button
-              onClick={() => setIsUploadOpen(true)}
-              className="btn-primary inline-flex items-center gap-2"
-              id="empty-state-upload-button"
-            >
-              <Plus className="w-4 h-4" />
-              Upload Your First PDF
-            </button>
+            {!searchQuery && (
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                className="btn-primary inline-flex items-center gap-2"
+                id="empty-state-upload-button"
+              >
+                <Plus className="w-4 h-4" />
+                Upload Your First PDF
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-            {documents.map((doc) => (
-              <DocumentCard 
-                key={doc.id} 
-                doc={doc} 
-                onRename={async (id, newName) => {
-                  if (!user) return;
-                  const { renameDocument } = await import("@/lib/firestore");
-                  const finalName = newName.toLowerCase().endsWith(".pdf") ? newName : `${newName}.pdf`;
-                  await renameDocument(user.uid, id, finalName);
-                  await loadDashboard(); // refresh
-                }}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 stagger-children mb-8">
+              {paginatedDocuments.map((doc) => (
+                <DocumentCard 
+                  key={doc.id} 
+                  doc={doc} 
+                  onRename={async (id, newName) => {
+                    if (!user) return;
+                    const { renameDocument } = await import("@/lib/firestore");
+                    const finalName = newName.toLowerCase().endsWith(".pdf") ? newName : `${newName}.pdf`;
+                    await renameDocument(user.uid, id, finalName);
+                    await loadDashboard(); // refresh
+                  }}
+                  onDelete={async (id) => {
+                    if (!user) return;
+                    const { deleteDocumentSet } = await import("@/lib/firestore");
+                    await deleteDocumentSet(user.uid, id);
+                    await loadDashboard();
+                  }}
+                />
+              ))}
+            </div>
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg bg-[var(--surface)] border border-[var(--surface-border)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] disabled:opacity-50 transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm font-medium text-[var(--foreground-muted)]">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-lg bg-[var(--surface)] border border-[var(--surface-border)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] disabled:opacity-50 transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
