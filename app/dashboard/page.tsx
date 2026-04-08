@@ -13,6 +13,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import StatsCard from "@/components/StatsCard";
@@ -38,9 +39,11 @@ export default function DashboardPage() {
   const [totalCards, setTotalCards] = useState(0);
   const [todayReviewed, setTodayReviewed] = useState(0);
 
-  // Search & Pagination
+  // Search & Pagination & Bulk Select
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const ITEMS_PER_PAGE = 9;
 
   useEffect(() => {
@@ -139,6 +142,35 @@ export default function DashboardPage() {
     doc.fileName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (!user || selectedIds.size === 0) return;
+    const confirmDelete = window.confirm(`Are you sure you want to permanently delete ${selectedIds.size} documents?`);
+    if (!confirmDelete) return;
+
+    setIsLoading(true);
+    try {
+      const { deleteDocumentSet } = await import("@/lib/firestore");
+      for (const id of Array.from(selectedIds)) {
+        await deleteDocumentSet(user.uid, id);
+      }
+      setSelectedIds(new Set());
+      setIsSelectMode(false);
+      await loadDashboard();
+    } catch (error) {
+      console.error("Failed to perform bulk delete:", error);
+      setIsLoading(false);
+    }
+  };
+
   const totalPages = Math.ceil(filteredDocuments.length / ITEMS_PER_PAGE);
   const paginatedDocuments = filteredDocuments.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -201,22 +233,61 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Documents Header & Search */}
         <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-[var(--foreground)] flex items-center gap-2 shrink-0">
             <BookOpen className="w-5 h-5 text-indigo-400" />
             Your Documents
           </h2>
           {documents.length > 0 && (
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--foreground-muted)]" />
-              <input
-                type="text"
-                placeholder="Search documents..."
-                value={searchQuery}
-                onChange={handleSearch}
-                className="w-full bg-[var(--surface)] text-[var(--foreground)] placeholder:text-[var(--foreground-muted)] text-sm rounded-lg pl-9 pr-4 py-2 border border-[var(--surface-border)] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-              />
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+              
+              {isSelectMode ? (
+                 <div className="flex gap-2 items-center w-full sm:w-auto">
+                   <button 
+                     onClick={() => { setIsSelectMode(false); setSelectedIds(new Set()); }} 
+                     className="btn-secondary text-sm px-3 py-2 h-auto flex-1 sm:flex-none"
+                   >
+                     Cancel
+                   </button>
+                   <button 
+                     onClick={() => {
+                       if (selectedIds.size === documents.length) {
+                         setSelectedIds(new Set());
+                       } else {
+                         setSelectedIds(new Set(documents.map(d => d.id)));
+                       }
+                     }} 
+                     className="btn-secondary text-sm px-3 py-2 h-auto flex-1 sm:flex-none whitespace-nowrap"
+                   >
+                     {selectedIds.size === documents.length ? "Deselect All" : "Select All"}
+                   </button>
+                   <button 
+                     onClick={handleBulkDelete} 
+                     disabled={selectedIds.size === 0} 
+                     className="btn-primary text-sm px-3 py-2 h-auto bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 flex gap-2 items-center flex-1 sm:flex-none disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                   >
+                     <Trash2 className="w-4 h-4"/> Delete {selectedIds.size}
+                   </button>
+                 </div>
+              ) : (
+                <button 
+                  onClick={() => setIsSelectMode(true)} 
+                  className="btn-secondary text-sm px-4 py-2 h-auto whitespace-nowrap hidden sm:flex"
+                >
+                  Select
+                </button>
+              )}
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--foreground-muted)]" />
+                <input
+                  type="text"
+                  placeholder="Search documents..."
+                  value={searchQuery}
+                  onChange={handleSearch}
+                  className="w-full bg-[var(--surface)] text-[var(--foreground)] placeholder:text-[var(--foreground-muted)] text-sm rounded-lg pl-9 pr-4 py-2 border border-[var(--surface-border)] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -251,7 +322,10 @@ export default function DashboardPage() {
               {paginatedDocuments.map((doc) => (
                 <DocumentCard 
                   key={doc.id} 
-                  doc={doc} 
+                  doc={doc}
+                  isSelectMode={isSelectMode}
+                  isSelected={selectedIds.has(doc.id)}
+                  onToggleSelect={handleToggleSelect} 
                   onRename={async (id, newName) => {
                     if (!user) return;
                     const { renameDocument } = await import("@/lib/firestore");

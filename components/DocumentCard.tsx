@@ -10,9 +10,12 @@ interface DocumentCardProps {
   doc: DocumentSet;
   onRename?: (id: string, newName: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export default function DocumentCard({ doc, onRename, onDelete }: DocumentCardProps) {
+export default function DocumentCard({ doc, onRename, onDelete, isSelectMode, isSelected, onToggleSelect }: DocumentCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(doc.fileName.replace(".pdf", ""));
@@ -89,6 +92,10 @@ export default function DocumentCard({ doc, onRename, onDelete }: DocumentCardPr
   };
 
   const handleDisplayClick = () => {
+    if (isSelectMode) {
+      onToggleSelect?.(doc.id);
+      return;
+    }
     if (!isEditing && !isConfirmingDelete && !isDeleting) {
       router.push(`/study/${doc.id}`);
     }
@@ -133,9 +140,24 @@ export default function DocumentCard({ doc, onRename, onDelete }: DocumentCardPr
 
   return (
     <div 
-      className="glass glass-hover p-5 h-full group cursor-pointer relative"
+      className={`glass p-5 h-full group cursor-pointer relative transition-all ${
+        isSelectMode && isSelected 
+          ? 'border-indigo-500 bg-indigo-500/10' 
+          : 'glass-hover'
+      }`}
       onClick={handleDisplayClick}
     >
+      {/* Select Mode Checkbox */}
+      {isSelectMode && (
+        <div className={`absolute top-4 right-4 z-10 w-5 h-5 rounded flex items-center justify-center transition-colors border ${
+          isSelected 
+            ? 'bg-indigo-500 border-indigo-500' 
+            : 'bg-[var(--surface)] border-[var(--foreground-muted)] opacity-50'
+        }`}>
+          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start gap-3 mb-4">
         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center shrink-0">
@@ -168,29 +190,31 @@ export default function DocumentCard({ doc, onRename, onDelete }: DocumentCardPr
               </button>
             </form>
           ) : (
-            <div className="flex items-center gap-2 group/title">
+            <div className="flex items-center gap-2 group/title mr-6">
               <h3 className="font-semibold text-[var(--foreground)] truncate group-hover:text-indigo-400 transition-colors">
                 {doc.fileName.replace(".pdf", "")}
               </h3>
-              <div className="opacity-0 group-hover/title:opacity-100 flex items-center gap-1 transition-all">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsEditing(true);
-                  }}
-                  className="p-1 text-[var(--foreground-muted)] hover:text-indigo-400 rounded hover:bg-indigo-500/10"
-                  aria-label="Rename document"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={handleDeleteClick}
-                  className="p-1 text-[var(--foreground-muted)] hover:text-red-400 rounded hover:bg-red-500/10"
-                  aria-label="Delete document"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              {!isSelectMode && (
+                <div className="opacity-0 group-hover/title:opacity-100 flex items-center gap-1 transition-all">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsEditing(true);
+                    }}
+                    className="p-1 text-[var(--foreground-muted)] hover:text-indigo-400 rounded hover:bg-indigo-500/10"
+                    aria-label="Rename document"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={handleDeleteClick}
+                    className="p-1 text-[var(--foreground-muted)] hover:text-red-400 rounded hover:bg-red-500/10"
+                    aria-label="Delete document"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <p className="text-xs text-[var(--foreground-muted)] flex items-center gap-1 mt-0.5">

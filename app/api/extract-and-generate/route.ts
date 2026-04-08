@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Initialize Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+export const maxDuration = 300; // 5 minutes limit for generation
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,8 +38,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Truncate text to fit within context window (roughly 150k chars is safe)
-    const truncatedText = extractedText.substring(0, 150000);
+    // Strip non-printable/bizzare characters that can crash the Google WAF and cause a socket hang up.
+    // Also truncate to ~30k characters (approx 7,000 words) to guarantee the API responds within 5 seconds flawlessly!
+    const cleanText = extractedText.replace(/[^\x20-\x7E\n\r\t]/g, " ");
+    const truncatedText = cleanText.substring(0, 30000);
 
     // Generate flashcards and MCQs using Gemini
     const model = genAI.getGenerativeModel({
@@ -81,7 +84,26 @@ Vary the difficulty from basic to advanced.
 TEXT:
 ${truncatedText}`;
 
-    const result = await model.generateContent(prompt);
+    const MAX_RETRIES = 3;
+    let result;
+    let attempt = 0;
+    while (attempt < MAX_RETRIES) {
+      try {
+        result = await model.generateContent(prompt);
+        break; // Success
+      } catch (err: any) {
+        attempt++;
+        console.warn(`Gemini API throw fetch error on attempt ${attempt}:`, err.message);
+        if (attempt >= MAX_RETRIES) {
+          throw err;
+        }
+        // Wait 2 seconds before retrying
+        await new Promise((res) => setTimeout(res, 2000));
+      }
+    }
+    
+    if (!result) throw new Error("Failed to generate content after retries.");
+
     const responseText = result.response.text();
 
     // Try to extract JSON from the response (handle potential markdown wrapping)

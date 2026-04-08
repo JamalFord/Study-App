@@ -117,9 +117,8 @@ export default function UploadModal({
 
     let hasError = false;
 
-    for (let i = 0; i < files.length; i++) {
-      const currentFile = files[i];
-      if (currentFile.status === "success" || currentFile.error?.includes("10MB")) continue;
+    const uploadPromises = files.map(async (currentFile, i) => {
+      if (currentFile.status === "success" || currentFile.error?.includes("10MB")) return;
 
       setFiles((prev) =>
         prev.map((f, idx) =>
@@ -140,6 +139,11 @@ export default function UploadModal({
             // @ts-expect-error - pdfjs items missing types
             const pageText = textContent.items.map((item) => item.str).join(" ");
             extractedText += pageText + "\n";
+            // Hard cap extraction to 100k chars to prevent memory spike
+            if (extractedText.length > 100000) {
+              extractedText = extractedText.substring(0, 100000);
+              break;
+            }
           }
         } catch (pdfErr) {
           console.error("PDF extraction error:", pdfErr);
@@ -161,7 +165,7 @@ export default function UploadModal({
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          if (response.status === 503 || response.status === 504 || response.status === 500) {
+          if (response.status === 503 || response.status === 504) {
             throw new Error("The APIs are busy, please try again later.");
           }
           throw new Error(data.error || "Generation failed. Please try again.");
@@ -192,7 +196,9 @@ export default function UploadModal({
           )
         );
       }
-    }
+    });
+
+    await Promise.allSettled(uploadPromises);
 
     setFiles((currentFiles) => {
       const allSuccess = currentFiles.every((f) => f.status === "success");
@@ -471,10 +477,21 @@ export default function UploadModal({
 
         {/* Actions */}
         {(uploadState === "idle" || uploadState === "error") && (
-          <div className="flex gap-3 mt-6">
+          <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <button onClick={handleClose} className="btn-secondary flex-1">
-               Cancel
+               {uploadState === "error" ? "Discard All" : "Cancel"}
             </button>
+            
+            {uploadState === "error" && files.some(f => f.status === "success") && (
+              <button 
+                onClick={() => saveAll(files)} 
+                className="btn-secondary flex-1 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                title="Save the files that succeeded and discard the ones that failed"
+              >
+                Save Successful
+              </button>
+            )}
+
             <button
                onClick={handleUpload}
                disabled={files.length === 0 || files.every(f => f.status === 'success') || (numFlashcards === 0 && numMCQs === 0 && numCRQs === 0)}
