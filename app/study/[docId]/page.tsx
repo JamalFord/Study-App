@@ -12,8 +12,6 @@ import GenerateMoreModal from "@/components/GenerateMoreModal";
 import { DocumentSet, QualityGrade } from "@/lib/types";
 import {
   getDocumentSet,
-import {
-  getDocumentSet,
   updateFlashcardProgress,
   recordStudySession,
   updateStudyStreak,
