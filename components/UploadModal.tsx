@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, DragEvent } from "react";
 import { Upload, FileText, X, Loader2, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
-import * as pdfjsLib from "pdfjs-dist";
 import { useRouter } from "next/navigation";
 
 interface UploadModalProps {
@@ -48,7 +47,11 @@ export default function UploadModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    if (typeof window !== "undefined") {
+      import("pdfjs-dist").then((pdfjs) => {
+        pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+      });
+    }
   }, []);
 
   if (!isOpen) return null;
@@ -79,25 +82,27 @@ export default function UploadModal({
 
   const addFiles = (newFiles: File[]) => {
     setGlobalError("");
-    const validFiles = newFiles
-      .filter((f) => {
-        if (f.type !== "application/pdf") {
-          setGlobalError("One or more files skipped: Not a PDF.");
-          return false;
-        }
-        if (f.size > 10 * 1024 * 1024) {
-          setGlobalError("One or more files skipped: Exceeds 10MB limit.");
-          return false;
-        }
-        return true;
-      })
-      .map((file) => ({
+    const newFileItems = newFiles.map((file) => {
+      let initialStatus: "idle" | "error" = "idle";
+      let errorMsg: string | undefined = undefined;
+
+      if (file.type !== "application/pdf") {
+        initialStatus = "error";
+        errorMsg = "Not a valid PDF file.";
+      } else if (file.size > 10 * 1024 * 1024) {
+        initialStatus = "error";
+        errorMsg = "Exceeds 10MB limit. Try compressing or splitting.";
+      }
+
+      return {
         id: Math.random().toString(36).substring(7),
         file,
-        status: "idle" as const,
-      }));
+        status: initialStatus,
+        error: errorMsg,
+      };
+    });
 
-    setFiles((prev) => [...prev, ...validFiles]);
+    setFiles((prev) => [...prev, ...newFileItems]);
   };
 
   const removeFile = (id: string) => {
@@ -114,7 +119,7 @@ export default function UploadModal({
 
     for (let i = 0; i < files.length; i++) {
       const currentFile = files[i];
-      if (currentFile.status === "success") continue;
+      if (currentFile.status === "success" || currentFile.error?.includes("10MB")) continue;
 
       setFiles((prev) =>
         prev.map((f, idx) =>
@@ -126,8 +131,9 @@ export default function UploadModal({
         // --- Client-Side PDF Text Extraction ---
         let extractedText = "";
         try {
+          const pdfjs = await import("pdfjs-dist");
           const arrayBuffer = await currentFile.file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
@@ -152,10 +158,13 @@ export default function UploadModal({
           body: formData,
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(data.error || "Upload failed");
+          if (response.status === 503 || response.status === 504 || response.status === 500) {
+            throw new Error("The APIs are busy, please try again later.");
+          }
+          throw new Error(data.error || "Generation failed. Please try again.");
         }
 
         setFiles((prev) =>
@@ -165,13 +174,19 @@ export default function UploadModal({
         );
       } catch (err) {
         hasError = true;
+        let errorMessage = "Something went wrong";
+        if (err instanceof Error) {
+          // If it's an explicit error string or fetch failure
+          errorMessage = err.message === "Failed to fetch" ? "Network error: The APIs are busy, please try again." : err.message;
+        }
+        
         setFiles((prev) =>
           prev.map((f, idx) =>
             idx === i
               ? {
                   ...f,
                   status: "error",
-                  error: err instanceof Error ? err.message : "Something went wrong",
+                  error: errorMessage,
                 }
               : f
           )
