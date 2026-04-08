@@ -62,10 +62,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="relative z-10 max-w-4xl mx-auto px-6 pt-20 pb-32 text-center">
         <div className="animate-fade-in-up">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium mb-8">
-            <Sparkles className="w-4 h-4" />
-            Powered by AI
-          </div>
+
 
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-[var(--foreground)] leading-[1.1] mb-6">
             Study smarter,
