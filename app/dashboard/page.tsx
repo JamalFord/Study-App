@@ -104,6 +104,7 @@ export default function DashboardPage() {
     crQuestions?: any[];
     fileName: string;
     textPreview: string;
+    extractedText: string;
   }>): Promise<Array<{ id: string; fileName: string }>> => {
     if (!user) return [];
 
@@ -117,6 +118,7 @@ export default function DashboardPage() {
           flashcards: data.flashcards,
           mcQuestions: data.mcQuestions,
           textPreview: data.textPreview,
+          extractedText: data.extractedText,
         };
         if (data.crQuestions && data.crQuestions.length > 0) {
           docSetPayload.crQuestions = data.crQuestions;

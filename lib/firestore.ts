@@ -80,6 +80,19 @@ export async function updateFlashcardProgress(
   await updateDoc(docRef, { flashcards: updatedFlashcards });
 }
 
+export async function updateDocumentMaterials(
+  userId: string,
+  docId: string,
+  materials: {
+    flashcards: Flashcard[];
+    mcQuestions: any[];
+    crQuestions?: any[];
+  }
+): Promise<void> {
+  const docRef = doc(getFirebaseDb(), "users", userId, "documents", docId);
+  await updateDoc(docRef, materials);
+}
+
 // ── Study Sessions ──────────────────────────────────────────
 
 export async function recordStudySession(

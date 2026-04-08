@@ -172,6 +172,7 @@ ${truncatedText}`;
       crQuestions: returnData.crQuestions,
       fileName: fileName,
       textPreview: extractedText.substring(0, 200),
+      extractedText: truncatedText,
     });
   } catch (error) {
     console.error("Error processing PDF:", error);

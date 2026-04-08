@@ -3,17 +3,21 @@
 import { useAuth } from "@/lib/auth-context";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Brain, HelpCircle, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, Brain, HelpCircle, Loader2, FileText, PlusCircle } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import FlashcardViewer from "@/components/FlashcardViewer";
 import MCQViewer from "@/components/MCQViewer";
 import CRQViewer from "@/components/CRQViewer";
+import GenerateMoreModal from "@/components/GenerateMoreModal";
 import { DocumentSet, QualityGrade } from "@/lib/types";
+import {
+  getDocumentSet,
 import {
   getDocumentSet,
   updateFlashcardProgress,
   recordStudySession,
   updateStudyStreak,
+  updateDocumentMaterials,
 } from "@/lib/firestore";
 import {
   calculateNextReview,
@@ -35,6 +39,7 @@ export default function StudyPage() {
   const [activeTab, setActiveTab] = useState<StudyTab>("flashcards");
   const [reviewCount, setReviewCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
+  const [isGenerateMoreOpen, setIsGenerateMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -102,6 +107,34 @@ export default function StudyPage() {
       await updateStudyStreak(user.uid);
     } catch (error) {
       console.error("Error saving progress:", error);
+    }
+  };
+
+  const handleGenerateMore = async (newMaterials: any) => {
+    if (!user || !docSet) return;
+    
+    const updatedDocSet = { ...docSet };
+    
+    if (newMaterials.flashcards.length > 0) {
+      updatedDocSet.flashcards = [...docSet.flashcards, ...newMaterials.flashcards];
+    }
+    if (newMaterials.mcQuestions.length > 0) {
+      updatedDocSet.mcQuestions = [...(docSet.mcQuestions || []), ...newMaterials.mcQuestions];
+    }
+    if (newMaterials.crQuestions.length > 0) {
+      updatedDocSet.crQuestions = [...(docSet.crQuestions || []), ...newMaterials.crQuestions];
+    }
+    
+    setDocSet(updatedDocSet);
+    
+    try {
+      await updateDocumentMaterials(user.uid, docId, {
+        flashcards: updatedDocSet.flashcards,
+        mcQuestions: updatedDocSet.mcQuestions || [],
+        crQuestions: updatedDocSet.crQuestions || [],
+      });
+    } catch (error) {
+      console.error("Error saving new generated materials", error);
     }
   };
 
@@ -198,6 +231,16 @@ export default function StudyPage() {
               Constructed Response
             </button>
           )}
+
+          <div className="w-px h-6 bg-[var(--surface-border)] mx-1 shrink-0" />
+            <button
+              onClick={() => setIsGenerateMoreOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all text-[var(--foreground-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 shrink-0"
+              title="Generate more study materials"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Generate More
+            </button>
         </div>
 
         {/* Content */}
@@ -214,6 +257,16 @@ export default function StudyPage() {
           <CRQViewer questions={docSet.crQuestions} />
         )}
       </main>
+
+      {docSet && (
+        <GenerateMoreModal
+          isOpen={isGenerateMoreOpen}
+          onClose={() => setIsGenerateMoreOpen(false)}
+          extractedText={docSet.extractedText}
+          fileName={docSet.fileName}
+          onGenerate={handleGenerateMore}
+        />
+      )}
     </div>
   );
 }

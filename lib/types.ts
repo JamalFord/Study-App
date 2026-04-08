@@ -32,6 +32,7 @@ export interface DocumentSet {
   mcQuestions: MCQuestion[];
   crQuestions?: CRQuestion[];
   textPreview: string; // first 200 chars of extracted text
+  extractedText?: string; // Full extracted text required to generate new items
 }
 
 export interface StudySession {

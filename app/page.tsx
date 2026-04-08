@@ -73,7 +73,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-lg sm:text-xl text-[var(--foreground-secondary)] max-w-2xl mx-auto mb-10 leading-relaxed">
-            Upload your lecture slides and let AI generate flashcards and quizzes
+            Upload your lecture slides and generate flashcards and quizzes
             instantly. Track your progress with spaced repetition.
           </p>
 
@@ -121,8 +121,8 @@ export default function LandingPage() {
             },
             {
               icon: <Brain className="w-7 h-7" />,
-              title: "AI Generates Study Materials",
-              desc: "Claude AI creates 10 flashcards and 5 quiz questions tailored to your content.",
+              title: "Instant Study Materials",
+              desc: "Automatically extracts 10 flashcards and 5 quiz questions tailored to your content.",
               gradient: "from-purple-500/20 to-pink-500/20",
               border: "border-purple-500/20",
               iconColor: "text-purple-400",
@@ -160,7 +160,7 @@ export default function LandingPage() {
         <div className="space-y-8">
           {[
             { step: "01", title: "Upload your PDF", desc: "Lecture slides, textbook chapters, or syllabi", icon: <Upload className="w-5 h-5" /> },
-            { step: "02", title: "AI extracts & generates", desc: "Flashcards and MCQs crafted from your content", icon: <Zap className="w-5 h-5" /> },
+            { step: "02", title: "Generate study sets", desc: "Flashcards and MCQs crafted from your content", icon: <Zap className="w-5 h-5" /> },
             { step: "03", title: "Study with spaced repetition", desc: "Cards you miss come back more often", icon: <Brain className="w-5 h-5" /> },
             { step: "04", title: "Track your progress", desc: "Dashboard with streaks, accuracy, and growth", icon: <TrendingUp className="w-5 h-5" /> },
           ].map((item, i) => (

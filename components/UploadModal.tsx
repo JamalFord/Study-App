@@ -13,6 +13,7 @@ interface UploadModalProps {
     crQuestions?: any[];
     fileName: string;
     textPreview: string;
+    extractedText: string;
   }>) => Promise<Array<{ id: string; fileName: string }>>;
 }
 

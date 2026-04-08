@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StudyForge — AI-Powered Study Tool",
+  title: "StudyForge",
   description:
-    "Upload your lecture slides and let AI generate flashcards and quizzes. Track your progress with spaced repetition.",
-  keywords: ["study", "flashcards", "AI", "spaced repetition", "education"],
+    "Upload your lecture slides and generate flashcards and quizzes instantly. Track your progress with spaced repetition.",
+  keywords: ["study", "flashcards", "spaced repetition", "education"],
 };
 
 export default function RootLayout({
