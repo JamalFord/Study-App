@@ -51,6 +51,15 @@ export async function getDocumentSet(
   return { id: snapshot.id, ...snapshot.data() } as DocumentSet;
 }
 
+export async function renameDocument(
+  userId: string,
+  docId: string,
+  newName: string
+): Promise<void> {
+  const docRef = doc(getFirebaseDb(), "users", userId, "documents", docId);
+  await updateDoc(docRef, { fileName: newName });
+}
+
 // ── Flashcard Progress ──────────────────────────────────────
 
 export async function updateFlashcardProgress(

@@ -3,10 +3,11 @@
 import { useAuth } from "@/lib/auth-context";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Brain, HelpCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Brain, HelpCircle, Loader2, FileText } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import FlashcardViewer from "@/components/FlashcardViewer";
 import MCQViewer from "@/components/MCQViewer";
+import CRQViewer from "@/components/CRQViewer";
 import { DocumentSet, QualityGrade } from "@/lib/types";
 import {
   getDocumentSet,
@@ -21,7 +22,7 @@ import {
 } from "@/lib/spaced-repetition";
 import Link from "next/link";
 
-type StudyTab = "flashcards" | "mcq";
+type StudyTab = "flashcards" | "mcq" | "crq";
 
 export default function StudyPage() {
   const { user, loading: authLoading } = useAuth();
@@ -147,48 +148,70 @@ export default function StudyPage() {
             </h1>
             <p className="text-sm text-[var(--foreground-muted)]">
               {dueCards.length} cards due •{" "}
-              {docSet.flashcards.length} total flashcards •{" "}
-              {docSet.mcQuestions.length} MCQs
+              {docSet.flashcards?.length || 0} total flashcards •{" "}
+              {docSet.mcQuestions?.length || 0} MCQs
+              {(docSet.crQuestions?.length || 0) > 0 && ` • ${docSet.crQuestions!.length} CRQs`}
             </p>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 p-1 glass mb-8 w-fit border border-[var(--surface-border)]">
-          <button
-            onClick={() => setActiveTab("flashcards")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              activeTab === "flashcards"
-                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                : "text-[var(--foreground-muted)] hover:text-[var(--foreground)] border border-transparent"
-            }`}
-            id="flashcards-tab"
-          >
-            <Brain className="w-4 h-4" />
-            Flashcards
-          </button>
-          <button
-            onClick={() => setActiveTab("mcq")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              activeTab === "mcq"
-                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                : "text-[var(--foreground-muted)] hover:text-[var(--foreground)] border border-transparent"
-            }`}
-            id="mcq-tab"
-          >
-            <HelpCircle className="w-4 h-4" />
-            Multiple Choice
-          </button>
+        <div className="flex gap-1 p-1 glass mb-8 w-fit border border-[var(--surface-border)] overflow-x-auto">
+          {docSet.flashcards && docSet.flashcards.length > 0 && (
+            <button
+              onClick={() => setActiveTab("flashcards")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "flashcards"
+                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                  : "text-[var(--foreground-muted)] hover:text-[var(--foreground)] border border-transparent"
+              }`}
+              id="flashcards-tab"
+            >
+              <Brain className="w-4 h-4" />
+              Flashcards
+            </button>
+          )}
+          {docSet.mcQuestions && docSet.mcQuestions.length > 0 && (
+            <button
+              onClick={() => setActiveTab("mcq")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "mcq"
+                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                  : "text-[var(--foreground-muted)] hover:text-[var(--foreground)] border border-transparent"
+              }`}
+              id="mcq-tab"
+            >
+              <HelpCircle className="w-4 h-4" />
+              Multiple Choice
+            </button>
+          )}
+          {docSet.crQuestions && docSet.crQuestions.length > 0 && (
+            <button
+              onClick={() => setActiveTab("crq")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "crq"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                  : "text-[var(--foreground-muted)] hover:text-[var(--foreground)] border border-transparent"
+              }`}
+              id="crq-tab"
+            >
+              <FileText className="w-4 h-4" />
+              Constructed Response
+            </button>
+          )}
         </div>
 
         {/* Content */}
-        {activeTab === "flashcards" ? (
+        {activeTab === "flashcards" && docSet.flashcards && docSet.flashcards.length > 0 && (
           <FlashcardViewer
             flashcards={displayCards}
             onGrade={handleFlashcardGrade}
           />
-        ) : (
+        )}
+        {activeTab === "mcq" && docSet.mcQuestions && docSet.mcQuestions.length > 0 && (
           <MCQViewer questions={docSet.mcQuestions} />
+        )}
+        {activeTab === "crq" && docSet.crQuestions && docSet.crQuestions.length > 0 && (
+          <CRQViewer questions={docSet.crQuestions} />
         )}
       </main>
     </div>

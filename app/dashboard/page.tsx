@@ -1,4 +1,4 @@
-"use client";
+h"use client";
 
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
@@ -90,6 +90,7 @@ export default function DashboardPage() {
   const handleUploadComplete = async (docsData: Array<{
     flashcards: any[];
     mcQuestions: any[];
+    crQuestions?: any[];
     fileName: string;
     textPreview: string;
   }>): Promise<Array<{ id: string; fileName: string }>> => {
@@ -98,14 +99,18 @@ export default function DashboardPage() {
     try {
       const createdDocs = [];
       for (const data of docsData) {
-        const docId = await saveDocumentSet(user.uid, {
+        const docSetPayload: Omit<DocumentSet, "id"> = {
           userId: user.uid,
           fileName: data.fileName,
           uploadedAt: new Date().toISOString(),
           flashcards: data.flashcards,
           mcQuestions: data.mcQuestions,
           textPreview: data.textPreview,
-        });
+        };
+        if (data.crQuestions && data.crQuestions.length > 0) {
+          docSetPayload.crQuestions = data.crQuestions;
+        }
+        const docId = await saveDocumentSet(user.uid, docSetPayload);
         createdDocs.push({ id: docId, fileName: data.fileName });
       }
 
@@ -206,7 +211,17 @@ export default function DashboardPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
             {documents.map((doc) => (
-              <DocumentCard key={doc.id} doc={doc} />
+              <DocumentCard 
+                key={doc.id} 
+                doc={doc} 
+                onRename={async (id, newName) => {
+                  if (!user) return;
+                  const { renameDocument } = await import("@/lib/firestore");
+                  const finalName = newName.toLowerCase().endsWith(".pdf") ? newName : `${newName}.pdf`;
+                  await renameDocument(user.uid, id, finalName);
+                  await loadDashboard(); // refresh
+                }}
+              />
             ))}
           </div>
         )}

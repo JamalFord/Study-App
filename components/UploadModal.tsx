@@ -10,6 +10,7 @@ interface UploadModalProps {
   onUploadComplete: (docsData: Array<{
     flashcards: any[];
     mcQuestions: any[];
+    crQuestions?: any[];
     fileName: string;
     textPreview: string;
   }>) => Promise<Array<{ id: string; fileName: string }>>;
@@ -36,6 +37,13 @@ export default function UploadModal({
   const [globalError, setGlobalError] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [createdDocuments, setCreatedDocuments] = useState<Array<{ id: string; fileName: string }>>([]);
+  
+  // Settings
+  const [numFlashcards, setNumFlashcards] = useState(10);
+  const [numMCQs, setNumMCQs] = useState(5);
+  const [numCRQs, setNumCRQs] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -112,6 +120,9 @@ export default function UploadModal({
       try {
         const formData = new FormData();
         formData.append("file", currentFile.file);
+        formData.append("numFlashcards", numFlashcards.toString());
+        formData.append("numMCQs", numMCQs.toString());
+        formData.append("numCRQs", numCRQs.toString());
 
         const response = await fetch("/api/extract-and-generate", {
           method: "POST",
@@ -285,6 +296,59 @@ export default function UploadModal({
                 ))}
               </div>
             )}
+
+            {/* Advanced Settings */}
+            <div className="mt-6 border-t border-[var(--surface-border)] pt-4">
+              <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className="text-sm font-medium text-[var(--foreground)] flex items-center justify-between w-full hover:text-indigo-400 transition-colors"
+                type="button"
+              >
+                Generation Settings
+                <span className="text-xs text-[var(--foreground-muted)]">{showSettings ? "Hide" : "Show"}</span>
+              </button>
+              
+              {showSettings && (
+                <div className="mt-4 space-y-4 text-sm animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[var(--foreground)]">
+                      <span>Flashcards</span>
+                      <span className="font-medium text-indigo-400">{numFlashcards}</span>
+                    </div>
+                    <input 
+                      type="range" min="0" max="20" 
+                      value={numFlashcards} onChange={(e) => setNumFlashcards(parseInt(e.target.value))}
+                      className="w-full accent-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[var(--foreground)]">
+                      <span>Multiple Choice</span>
+                      <span className="font-medium text-purple-400">{numMCQs}</span>
+                    </div>
+                    <input 
+                      type="range" min="0" max="20" 
+                      value={numMCQs} onChange={(e) => setNumMCQs(parseInt(e.target.value))}
+                      className="w-full accent-purple-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[var(--foreground)]">
+                      <span>Constructed Response</span>
+                      <span className="font-medium text-emerald-400">{numCRQs}</span>
+                    </div>
+                    <input 
+                      type="range" min="0" max="10" 
+                      value={numCRQs} onChange={(e) => setNumCRQs(parseInt(e.target.value))}
+                      className="w-full accent-emerald-500"
+                    />
+                  </div>
+                  {numFlashcards === 0 && numMCQs === 0 && numCRQs === 0 && (
+                     <p className="text-xs text-red-400 mt-2">You must select at least 1 study material to generate.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -375,7 +439,7 @@ export default function UploadModal({
             </button>
             <button
                onClick={handleUpload}
-               disabled={files.length === 0 || files.every(f => f.status === 'success')}
+               disabled={files.length === 0 || files.every(f => f.status === 'success') || (numFlashcards === 0 && numMCQs === 0 && numCRQs === 0)}
                className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
                id="generate-button"
             >

@@ -16,6 +16,13 @@ export interface MCQuestion {
   explanation: string;
 }
 
+export interface CRQuestion {
+  id: string;
+  question: string;
+  sampleAnswer: string;
+  keyConcepts: string[];
+}
+
 export interface DocumentSet {
   id: string;
   userId: string;
@@ -23,6 +30,7 @@ export interface DocumentSet {
   uploadedAt: string; // ISO date string
   flashcards: Flashcard[];
   mcQuestions: MCQuestion[];
+  crQuestions?: CRQuestion[];
   textPreview: string; // first 200 chars of extracted text
 }
 
