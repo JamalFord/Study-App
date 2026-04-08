@@ -87,28 +87,33 @@ export default function DashboardPage() {
     }
   };
 
-  const handleUploadComplete = async (data: {
+  const handleUploadComplete = async (docsData: Array<{
     flashcards: any[];
     mcQuestions: any[];
     fileName: string;
     textPreview: string;
-  }) => {
-    if (!user) return;
+  }>): Promise<Array<{ id: string; fileName: string }>> => {
+    if (!user) return [];
 
     try {
-      const docId = await saveDocumentSet(user.uid, {
-        userId: user.uid,
-        fileName: data.fileName,
-        uploadedAt: new Date().toISOString(),
-        flashcards: data.flashcards,
-        mcQuestions: data.mcQuestions,
-        textPreview: data.textPreview,
-      });
+      const createdDocs = [];
+      for (const data of docsData) {
+        const docId = await saveDocumentSet(user.uid, {
+          userId: user.uid,
+          fileName: data.fileName,
+          uploadedAt: new Date().toISOString(),
+          flashcards: data.flashcards,
+          mcQuestions: data.mcQuestions,
+          textPreview: data.textPreview,
+        });
+        createdDocs.push({ id: docId, fileName: data.fileName });
+      }
 
-      setIsUploadOpen(false);
-      router.push(`/study/${docId}`);
+      await loadDashboard();
+      return createdDocs;
     } catch (error) {
       console.error("Error saving document:", error);
+      return [];
     }
   };
 

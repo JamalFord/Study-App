@@ -1,30 +1,41 @@
 "use client";
 
 import { useState, useRef, DragEvent } from "react";
-import { Upload, FileText, X, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, X, Loader2, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadComplete: (data: {
+  onUploadComplete: (docsData: Array<{
     flashcards: any[];
     mcQuestions: any[];
     fileName: string;
     textPreview: string;
-  }) => void;
+  }>) => Promise<Array<{ id: string; fileName: string }>>;
 }
 
 type UploadState = "idle" | "uploading" | "processing" | "success" | "error";
+
+interface FileItem {
+  id: string; // unique internal id
+  file: File;
+  status: "idle" | "processing" | "success" | "error";
+  data?: any;
+  error?: string;
+}
 
 export default function UploadModal({
   isOpen,
   onClose,
   onUploadComplete,
 }: UploadModalProps) {
-  const [file, setFile] = useState<File | null>(null);
+  const router = useRouter();
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
-  const [error, setError] = useState<string>("");
+  const [globalError, setGlobalError] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
+  const [createdDocuments, setCreatedDocuments] = useState<Array<{ id: string; fileName: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -42,98 +53,165 @@ export default function UploadModal({
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    validateAndSetFile(droppedFile);
+    if (e.dataTransfer.files?.length) {
+      addFiles(Array.from(e.dataTransfer.files));
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) validateAndSetFile(selectedFile);
+    if (e.target.files?.length) {
+      addFiles(Array.from(e.target.files));
+    }
   };
 
-  const validateAndSetFile = (f: File) => {
-    setError("");
-    if (f.type !== "application/pdf") {
-      setError("Please upload a PDF file.");
-      return;
-    }
-    if (f.size > 10 * 1024 * 1024) {
-      setError("File must be less than 10MB.");
-      return;
-    }
-    setFile(f);
+  const addFiles = (newFiles: File[]) => {
+    setGlobalError("");
+    const validFiles = newFiles
+      .filter((f) => {
+        if (f.type !== "application/pdf") {
+          setGlobalError("One or more files skipped: Not a PDF.");
+          return false;
+        }
+        if (f.size > 10 * 1024 * 1024) {
+          setGlobalError("One or more files skipped: Exceeds 10MB limit.");
+          return false;
+        }
+        return true;
+      })
+      .map((file) => ({
+        id: Math.random().toString(36).substring(7),
+        file,
+        status: "idle" as const,
+      }));
+
+    setFiles((prev) => [...prev, ...validFiles]);
+  };
+
+  const removeFile = (id: string) => {
+    setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (files.length === 0) return;
 
     setUploadState("uploading");
-    setError("");
+    setGlobalError("");
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
+    let hasError = false;
 
-      setUploadState("processing");
+    for (let i = 0; i < files.length; i++) {
+      const currentFile = files[i];
+      if (currentFile.status === "success") continue;
 
-      const response = await fetch("/api/extract-and-generate", {
-        method: "POST",
-        body: formData,
-      });
+      setFiles((prev) =>
+        prev.map((f, idx) =>
+          idx === i ? { ...f, status: "processing", error: undefined } : f
+        )
+      );
 
-      const data = await response.json();
+      try {
+        const formData = new FormData();
+        formData.append("file", currentFile.file);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Upload failed");
+        const response = await fetch("/api/extract-and-generate", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Upload failed");
+        }
+
+        setFiles((prev) =>
+          prev.map((f, idx) =>
+            idx === i ? { ...f, status: "success", data } : f
+          )
+        );
+      } catch (err) {
+        hasError = true;
+        setFiles((prev) =>
+          prev.map((f, idx) =>
+            idx === i
+              ? {
+                  ...f,
+                  status: "error",
+                  error: err instanceof Error ? err.message : "Something went wrong",
+                }
+              : f
+          )
+        );
       }
+    }
 
+    setFiles((currentFiles) => {
+      const allSuccess = currentFiles.every((f) => f.status === "success");
+      if (allSuccess) {
+        saveAll(currentFiles);
+      } else {
+        setUploadState("error");
+        setGlobalError("Some files failed to process. You can retry them.");
+      }
+      return currentFiles;
+    });
+  };
+
+  const saveAll = async (currentFiles: FileItem[]) => {
+    setUploadState("processing");
+    const successfulData = currentFiles
+      .filter((f) => f.status === "success" && f.data)
+      .map((f) => f.data);
+      
+    if (successfulData.length > 0) {
+      const createdDocs = await onUploadComplete(successfulData);
+      setCreatedDocuments(createdDocs);
       setUploadState("success");
-
-      // Small delay so user sees success state
-      setTimeout(() => {
-        onUploadComplete(data);
-        handleReset();
-      }, 1000);
-    } catch (err) {
-      setUploadState("error");
-      setError(err instanceof Error ? err.message : "Something went wrong");
+    } else {
+      setUploadState("idle");
     }
   };
 
   const handleReset = () => {
-    setFile(null);
+    setFiles([]);
     setUploadState("idle");
-    setError("");
+    setGlobalError("");
     setIsDragging(false);
+    setCreatedDocuments([]);
   };
 
   const handleClose = () => {
+    if (uploadState === "processing" || uploadState === "uploading") return; 
     handleReset();
     onClose();
   };
 
+  const handleStudyDoc = (docId: string) => {
+    handleReset();
+    onClose();
+    router.push(`/study/${docId}`);
+  };
+
   return (
     <div className="modal-overlay" onClick={handleClose}>
-      <div
-        className="modal-content"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-[var(--foreground)]">
-            Upload Document
+            {uploadState === "success" ? "Upload Complete!" : "Upload Documents"}
           </h2>
           <button
             onClick={handleClose}
-            className="btn-ghost p-2 rounded-lg"
+            className="btn-ghost p-2 rounded-lg disabled:opacity-50"
+            disabled={uploadState === "processing" || uploadState === "uploading"}
             id="close-upload-modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Drop Zone */}
-        {uploadState === "idle" && (
+        {/* Drop Zone & File List */}
+        {(uploadState === "idle" || uploadState === "error") && (
           <>
             <div
               className={`drop-zone ${isDragging ? "active" : ""}`}
@@ -146,36 +224,65 @@ export default function UploadModal({
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf"
+                multiple
                 onChange={handleFileSelect}
                 className="hidden"
                 id="pdf-file-input"
               />
               <Upload className="w-12 h-12 mx-auto mb-4 text-[var(--foreground-muted)]" />
               <p className="text-[var(--foreground)] font-medium mb-1">
-                {file ? file.name : "Drop your PDF here"}
+                Drop PDF files here
               </p>
               <p className="text-sm text-[var(--foreground-muted)]">
-                {file
-                  ? `${(file.size / 1024 / 1024).toFixed(1)} MB`
-                  : "or click to browse • Max 10MB"}
+                or click to browse • Max 10MB per file
               </p>
             </div>
 
-            {file && (
-              <div className="flex items-center gap-3 mt-4 p-3 rounded-lg bg-[var(--surface)] border border-[var(--surface-border)]">
-                <FileText className="w-5 h-5 text-indigo-400 shrink-0" />
-                <span className="text-sm text-[var(--foreground)] truncate flex-1">
-                  {file.name}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFile(null);
-                  }}
-                  className="text-[var(--foreground-muted)] hover:text-[var(--error)] transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            {files.length > 0 && (
+              <div className="mt-4 space-y-2 max-h-48 overflow-y-auto pr-1">
+                {files.map((fileItem) => (
+                  <div
+                    key={fileItem.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border ${
+                      fileItem.status === "error"
+                        ? "bg-[var(--error-bg)] border-red-500/20"
+                        : fileItem.status === "success"
+                        ? "bg-emerald-500/5 border-emerald-500/20"
+                        : "bg-[var(--surface)] border-[var(--surface-border)]"
+                    }`}
+                  >
+                    {fileItem.status === "error" ? (
+                      <AlertCircle className="w-5 h-5 text-[var(--error)] shrink-0" />
+                    ) : fileItem.status === "success" ? (
+                      <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-indigo-400 shrink-0" />
+                    )}
+                    
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-[var(--foreground)] truncate">
+                        {fileItem.file.name}
+                      </p>
+                      {fileItem.error && (
+                        <p className="text-xs text-[var(--error)] truncate">
+                          {fileItem.error}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {fileItem.status !== "success" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile(fileItem.id);
+                        }}
+                        className="text-[var(--foreground-muted)] hover:text-[var(--error)] transition-colors p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </>
@@ -187,68 +294,100 @@ export default function UploadModal({
             <Loader2 className="w-12 h-12 mx-auto mb-4 text-indigo-400 animate-spin" />
             <p className="text-[var(--foreground)] font-medium mb-2">
               {uploadState === "uploading"
-                ? "Uploading PDF..."
-                : "AI is generating your study materials..."}
+                ? `Processing files... (${files.filter(f => f.status === 'success').length} / ${files.length})`
+                : "Saving to your dashboard..."}
             </p>
             <p className="text-sm text-[var(--foreground-muted)]">
               {uploadState === "processing"
-                ? "Creating 10 flashcards and 5 quiz questions"
-                : "This may take a moment"}
+                ? "Almost done!"
+                : "Generating study materials systematically to ensure quality."}
             </p>
             <div className="progress-bar mt-6 max-w-xs mx-auto">
               <div
                 className="progress-fill animate-shimmer"
-                style={{ width: uploadState === "uploading" ? "30%" : "70%" }}
+                style={{
+                  width: uploadState === "processing" ? "90%" : `${Math.max(10, (files.filter(f => f.status === 'success' || f.status === 'error').length / files.length) * 100)}%`
+                }}
               />
+            </div>
+            
+            {/* Show processing list */}
+            <div className="mt-8 space-y-2 text-left max-h-32 overflow-y-auto w-full max-w-sm mx-auto">
+                {files.map((fileItem) => (
+                  <div key={fileItem.id} className="flex items-center gap-2 text-sm">
+                     {fileItem.status === 'success' && <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0"/>}
+                     {fileItem.status === 'error' && <AlertCircle className="w-4 h-4 text-[var(--error)] shrink-0"/>}
+                     {fileItem.status === 'processing' && <Loader2 className="w-4 h-4 text-indigo-400 animate-spin shrink-0"/>}
+                     {fileItem.status === 'idle' && <div className="w-4 h-4 rounded-full border border-[var(--surface-border)] shrink-0"/>}
+                     <span className="truncate text-[var(--foreground-muted)]">{fileItem.file.name}</span>
+                  </div>
+                ))}
             </div>
           </div>
         )}
 
-        {/* Success State */}
+        {/* Success / Selection State */}
         {uploadState === "success" && (
-          <div className="text-center py-10">
-            <CheckCircle className="w-12 h-12 mx-auto mb-4 text-emerald-400" />
-            <p className="text-[var(--foreground)] font-medium">
-              Study materials generated!
-            </p>
-            <p className="text-sm text-[var(--foreground-muted)] mt-1">
-              Redirecting to your study session...
-            </p>
+          <div className="py-6">
+            <div className="text-center mb-6">
+              <CheckCircle className="w-12 h-12 mx-auto mb-3 text-emerald-400" />
+              <p className="text-[var(--foreground)] font-medium">
+                Success! Generated {createdDocuments.length} study {createdDocuments.length === 1 ? 'document' : 'documents'}.
+              </p>
+              <p className="text-sm text-[var(--foreground-muted)] mt-1">
+                Which one would you like to study first?
+              </p>
+            </div>
+            
+            <div className="space-y-3 max-h-64 overflow-y-auto mb-6 px-1">
+              {createdDocuments.map((doc) => (
+                <button
+                  key={doc.id}
+                  onClick={() => handleStudyDoc(doc.id)}
+                  className="w-full text-left p-4 rounded-xl border border-[var(--surface-border)] hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all group flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="w-5 h-5 text-indigo-400 shrink-0" />
+                    <span className="font-medium text-[var(--foreground)] truncate">
+                      {doc.fileName}
+                    </span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-indigo-400 opacity-0 group-hover:opacity-100 transform -translate-x-2 group-hover:translate-x-0 transition-all shrink-0" />
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Error */}
-        {error && (
+        {/* Global Error */}
+        {globalError && (
           <div className="flex items-start gap-3 mt-4 p-3 rounded-lg bg-[var(--error-bg)] border border-red-500/20">
-            <AlertCircle className="w-5 h-5 text-[var(--error)] shrink-0 mt-0.5" />
-            <p className="text-sm text-[var(--error)]">{error}</p>
+             <AlertCircle className="w-5 h-5 text-[var(--error)] shrink-0 mt-0.5" />
+             <p className="text-sm text-[var(--error)]">{globalError}</p>
           </div>
         )}
 
         {/* Actions */}
-        {uploadState === "idle" && (
+        {(uploadState === "idle" || uploadState === "error") && (
           <div className="flex gap-3 mt-6">
             <button onClick={handleClose} className="btn-secondary flex-1">
-              Cancel
+               Cancel
             </button>
             <button
-              onClick={handleUpload}
-              disabled={!file}
-              className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
-              id="generate-button"
+               onClick={handleUpload}
+               disabled={files.length === 0 || files.every(f => f.status === 'success')}
+               className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
+               id="generate-button"
             >
-              Generate Study Materials
+               {uploadState === "error" ? "Retry Failed" : "Generate Study Materials"}
             </button>
           </div>
         )}
-
-        {uploadState === "error" && (
-          <div className="flex gap-3 mt-6">
-            <button onClick={handleClose} className="btn-secondary flex-1">
-              Cancel
-            </button>
-            <button onClick={handleReset} className="btn-primary flex-1">
-              Try Again
+        
+        {uploadState === "success" && (
+          <div className="flex gap-3 mt-2">
+            <button onClick={handleClose} className="btn-secondary w-full">
+               Return to Dashboard
             </button>
           </div>
         )}
